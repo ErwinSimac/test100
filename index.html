@@ -135,7 +135,7 @@ let statuses = Array.isArray(state.statuses) && state.statuses.length
 // Begin altijd met Niet uitgevoerd als er nog geen selectie is opgeslagen.
 let selected = statuses.some(s => s.id === state.selected)
   ? state.selected
-  : "Niet uitgevoerd";
+  : defaults[0].id;
 
     const trigger = document.getElementById("trigger");
     const menu = document.getElementById("menu");
