@@ -395,6 +395,7 @@ async function persist() {
   }
 }
 
+
 async function loadStatus() {
   const { data, error } = await db
     .from("outline_statuses")
@@ -413,10 +414,13 @@ async function loadStatus() {
       statuses = data.statuses;
     }
 
+    // Bestaande handmatige keuze behouden.
     selected = statuses.some(s => s.id === data.selected)
       ? data.selected
-      : statuses[0].id;
+      : "Niet uitgevoerd";
+
   } else {
+    // Nieuwe pagina: altijd starten op Niet uitgevoerd.
     statuses = defaults.map(s => ({ ...s }));
     selected = "Niet uitgevoerd";
   }
@@ -424,10 +428,13 @@ async function loadStatus() {
   ready = true;
   render();
 
+  // Alleen bij de eerste keer opslaan.
+  // Daarna wordt de handmatige keuze behouden.
   if (!data) {
     await persist();
   }
 }
+
 
 function closeMenu() {
   menu.hidden = true;
