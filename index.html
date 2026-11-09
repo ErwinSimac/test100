@@ -9,7 +9,6 @@
   <style>
     :root {
       color-scheme: light dark;
-      --bg: transparent;
       --panel: #202124;
       --panel-border: #3b3d42;
       --text: #f4f4f5;
@@ -99,7 +98,9 @@
       box-shadow: 0 12px 32px rgba(0,0,0,.22);
     }
 
-    .menu[hidden], .editor[hidden] { display: none; }
+    .menu[hidden], .editor[hidden] {
+      display: none;
+    }
 
     .menu-heading {
       padding: 7px 9px 8px;
@@ -123,7 +124,8 @@
       cursor: pointer;
     }
 
-    .option:hover, .option[aria-checked="true"] {
+    .option:hover,
+    .option[aria-checked="true"] {
       background: var(--hover);
     }
 
@@ -371,22 +373,25 @@ async function persist() {
 
   saving = true;
 
-  const { error } = await db
-    .from("outline_statuses")
-    .upsert({
-      page_id: pageId,
-      selected: selected,
-      statuses: statuses,
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: "page_id"
-    });
+  try {
+    const { error } = await db
+      .from("outline_statuses")
+      .upsert({
+        page_id: pageId,
+        selected: selected,
+        statuses: statuses,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "page_id"
+      });
 
-  saving = false;
+    if (error) throw error;
 
-  if (error) {
+  } catch (error) {
     console.error("Opslaan mislukt:", error);
     alert("Opslaan mislukt. Controleer de databaseverbinding.");
+  } finally {
+    saving = false;
   }
 }
 
@@ -412,7 +417,6 @@ async function loadStatus() {
       ? data.selected
       : statuses[0].id;
   } else {
-    // Eerste bezoek aan deze Outline-pagina.
     statuses = defaults.map(s => ({ ...s }));
     selected = "Niet uitgevoerd";
   }
@@ -490,8 +494,13 @@ function subscribeToChanges() {
 
 async function start() {
   await loadStatus();
-  subscribeToChanges();
+
+  if (ready) {
+    subscribeToChanges();
+  }
 }
 
 start();
 </script>
+</body>
+</html>
