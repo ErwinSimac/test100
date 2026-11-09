@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Statusmenu</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: transparent;
+      --panel: #202124;
+      --panel-border: #3b3d42;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --hover: #303238;
+      --field: #292b30;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --panel: #ffffff;
+        --panel-border: #e5e7eb;
+        --text: #202124;
+        --muted: #71717a;
+        --hover: #f3f4f6;
+        --field: #ffffff;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: transparent; }
+    body {
+      font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      display: inline-block;
+      min-width: 230px;
+    }
+    .wrap { position: relative; display: inline-block; }
+    .trigger {
+      display: inline-flex; align-items: center; gap: 9px;
+      min-width: 170px; max-width: 240px;
+      padding: 8px 11px; border: 1px solid var(--panel-border);
+      border-radius: 8px; background: var(--field); color: var(--text);
+      cursor: pointer; font: inherit; text-align: left;
+    }
+    .trigger:hover { background: var(--hover); }
+    .trigger:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid #60a5fa; outline-offset: 2px;
+    }
+    .trigger-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chevron { color: var(--muted); font-size: 11px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; background: var(--dot, #9ca3af); }
+    .menu {
+      position: absolute; z-index: 10; top: calc(100% + 7px); left: 0;
+      width: 265px; padding: 7px; border: 1px solid var(--panel-border);
+      border-radius: 11px; background: var(--panel); color: var(--text);
+      box-shadow: 0 12px 32px rgba(0,0,0,.22);
+    }
+    .menu[hidden] { display: none; }
+    .menu-heading { padding: 7px 9px 8px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .option {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 8px 9px; border: 0; border-radius: 7px;
+      background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+    }
+    .option:hover { background: var(--hover); }
+    .option[aria-checked="true"] { background: var(--hover); }
+    .option-name { flex: 1; }
+    .check { color: var(--muted); }
+    .manage { margin-top: 5px; padding-top: 7px; border-top: 1px solid var(--panel-border); }
+    .manage-toggle {
+      width: 100%; padding: 8px 9px; border: 0; border-radius: 7px;
+      background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer;
+    }
+    .manage-toggle:hover { background: var(--hover); color: var(--text); }
+    .editor { padding: 7px 5px 3px; }
+    .editor[hidden] { display: none; }
+    .editor-row { display: flex; gap: 6px; margin: 6px 0; }
+    .editor input {
+      min-width: 0; flex: 1; padding: 7px 8px; border: 1px solid var(--panel-border);
+      border-radius: 6px; background: var(--field); color: var(--text); font: inherit;
+    }
+    .small-btn {
+      padding: 6px 8px; border: 1px solid var(--panel-border);
+      border-radius: 6px; background: var(--field); color: var(--text); cursor: pointer;
+    }
+    .hint { margin: 7px 3px 2px; color: var(--muted); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <button class="trigger" id="trigger" type="button" aria-haspopup="true" aria-expanded="false">
+      <span class="dot" id="currentDot"></span>
+      <span class="trigger-label" id="currentLabel">Ready</span>
+      <span class="chevron">▾</span>
+    </button>
+
+    <div class="menu" id="menu" hidden role="menu" aria-label="Status kiezen">
+      <div class="menu-heading">Status</div>
+      <div id="options"></div>
+      <div class="manage">
+        <button class="manage-toggle" id="manageToggle" type="button">⚙ Statusopties beheren</button>
+        <div class="editor" id="editor" hidden>
+          <div class="editor-row">
+            <input id="newName" type="text" maxlength="32" placeholder="Nieuwe status…" aria-label="Nieuwe status">
+            <button class="small-btn" id="addBtn" type="button">Toevoegen</button>
+          </div>
+          <div id="editOptions"></div>
+          <p class="hint">Wijzigingen worden lokaal in deze browser bewaard.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "outline-status-menu-v1";
+    const defaults = [
+      { id: "ready", name: "Ready", color: "#22c55e" },
+      { id: "progress", name: "In Progress", color: "#3b82f6" },
+      { id: "waiting", name: "Waiting", color: "#eab308" },
+      { id: "hold", name: "On Hold", color: "#a855f7" },
+      { id: "blocked", name: "Blocked", color: "#ef4444" },
+      { id: "completed", name: "Completed", color: "#9ca3af" }
+    ];
+
+    let state;
+    try {
+      state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch (_) { state = {}; }
+
+    let statuses = Array.isArray(state.statuses) && state.statuses.length ? state.statuses : defaults;
+    let selected = statuses.some(s => s.id === state.selected) ? state.selected : statuses[0].id;
+
+    const trigger = document.getElementById("trigger");
+    const menu = document.getElementById("menu");
+    const options = document.getElementById("options");
+    const currentDot = document.getElementById("currentDot");
+    const currentLabel = document.getElementById("currentLabel");
+    const editor = document.getElementById("editor");
+
+    function persist() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ statuses, selected })); }
+      catch (_) { /* Private browsing or storage restrictions: menu still works for this session. */ }
+    }
+    function render() {
+      const current = statuses.find(s => s.id === selected) || statuses[0];
+      currentLabel.textContent = current.name;
+      currentDot.style.setProperty("--dot", current.color);
+      options.replaceChildren();
+      statuses.forEach(status => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "option";
+        button.setAttribute("role", "menuitemradio");
+        button.setAttribute("aria-checked", String(status.id === selected));
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        dot.style.setProperty("--dot", status.color);
+        const name = document.createElement("span");
+        name.className = "option-name";
+        name.textContent = status.name;
+        const check = document.createElement("span");
+        check.className = "check";
+        check.textContent = status.id === selected ? "✓" : "";
+        button.append(dot, name, check);
+        button.addEventListener("click", () => {
+          selected = status.id;
+          persist();
+          render();
+          closeMenu();
+        });
+        options.append(button);
+      });
+      renderEditor();
+    }
+    function renderEditor() {
+      const list = document.getElementById("editOptions");
+      list.replaceChildren();
+      statuses.forEach(status => {
+        const row = document.createElement("div");
+        row.className = "editor-row";
+        const name = document.createElement("input");
+        name.value = status.name;
+        name.setAttribute("aria-label", "Naam van " + status.name);
+        name.addEventListener("change", () => {
+          const value = name.value.trim();
+          if (value) status.name = value;
+          else name.value = status.name;
+          persist(); render();
+        });
+        const color = document.createElement("input");
+        color.type = "color";
+        color.value = status.color;
+        color.title = "Kleur aanpassen";
+        color.style.flex = "0 0 38px";
+        color.style.padding = "2px";
+        color.addEventListener("input", () => { status.color = color.value; persist(); render(); });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "small-btn";
+        remove.textContent = "×";
+        remove.title = "Status verwijderen";
+        remove.addEventListener("click", () => {
+          if (statuses.length <= 1) return;
+          statuses = statuses.filter(s => s.id !== status.id);
+          if (selected === status.id) selected = statuses[0].id;
+          persist(); render();
+        });
+        row.append(name, color, remove);
+        list.append(row);
+      });
+    }
+    function closeMenu() {
+      menu.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+    }
+    trigger.addEventListener("click", () => {
+      menu.hidden = !menu.hidden;
+      trigger.setAttribute("aria-expanded", String(!menu.hidden));
+    });
+    document.addEventListener("click", event => {
+      if (!event.target.closest(".wrap")) closeMenu();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeMenu();
+    });
+    document.getElementById("manageToggle").addEventListener("click", () => {
+      editor.hidden = !editor.hidden;
+    });
+    document.getElementById("addBtn").addEventListener("click", () => {
+      const input = document.getElementById("newName");
+      const name = input.value.trim();
+      if (!name) return;
+      statuses.push({ id: "status-" + Date.now(), name, color: "#64748b" });
+      input.value = "";
+      persist(); render();
+      editor.hidden = false;
+    });
+    render();
+  </script>
+</body>
+</html>
