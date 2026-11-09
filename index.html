@@ -122,12 +122,20 @@
     ];
 
     let state;
-    try {
-      state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-    } catch (_) { state = {}; }
+try {
+  state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+} catch (_) {
+  state = {};
+}
 
-    let statuses = Array.isArray(state.statuses) && state.statuses.length ? state.statuses : defaults;
-    let selected = statuses.some(s => s.id === state.selected) ? state.selected : statuses[0].id;
+let statuses = Array.isArray(state.statuses) && state.statuses.length
+  ? state.statuses
+  : defaults.map(status => ({ ...status }));
+
+// Begin altijd met Niet uitgevoerd als er nog geen selectie is opgeslagen.
+let selected = statuses.some(s => s.id === state.selected)
+  ? state.selected
+  : "Niet uitgevoerd";
 
     const trigger = document.getElementById("trigger");
     const menu = document.getElementById("menu");
